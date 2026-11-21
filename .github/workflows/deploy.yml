@@ -12,12 +12,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "models/**"
-      - "data-tests/**"
-      - "dbt_project.yml"
-      - "profiles.yml"
-      - "src/runner/**"
-      - "Dockerfile"
+      - "dbt/**"
+      - "runner/**"
       - ".dockerignore"
       - "pyproject.toml"
       - "uv.lock"

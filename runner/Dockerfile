@@ -1,6 +1,6 @@
 # The dbt runner's Lambda image: AWS's Lambda Python base, dbt and the Athena adapter at the
 # versions in uv.lock (installed with their hashes checked), and the dbt project.
-# Build it with scripts/build-image.sh, which exports the requirements first.
+# Build it with scripts/build-image.sh (from the repo root), which exports the requirements first.
 # checkov:skip=CKV_DOCKER_2:Lambda images have no health check; Lambda manages the container
 # checkov:skip=CKV_DOCKER_3:Lambda runs the image as its own unprivileged user
 FROM public.ecr.aws/lambda/python:3.14@sha256:497df5d229e6d5c54279a6a48e7f597ff386bd02a9b3b37e788bb881108fc081 AS dependencies
@@ -15,13 +15,12 @@ FROM public.ecr.aws/lambda/python:3.14@sha256:497df5d229e6d5c54279a6a48e7f597ff3
 
 COPY --from=dependencies /opt/dependencies ${LAMBDA_TASK_ROOT}
 
-COPY dbt_project.yml profiles.yml ${LAMBDA_TASK_ROOT}/dbt/
-COPY models ${LAMBDA_TASK_ROOT}/dbt/models
-COPY data-tests ${LAMBDA_TASK_ROOT}/dbt/data-tests
-COPY src/runner ${LAMBDA_TASK_ROOT}/runner
+# The project goes in its own directory: ${LAMBDA_TASK_ROOT}/dbt is the dbt package itself.
+COPY dbt ${LAMBDA_TASK_ROOT}/project
+COPY runner/*.py ${LAMBDA_TASK_ROOT}/runner/
 
 # dbt writes its working files (compiled SQL, logs) under /tmp, the only writable path.
-ENV DBT_PROJECT_DIR=${LAMBDA_TASK_ROOT}/dbt \
+ENV DBT_PROJECT_DIR=${LAMBDA_TASK_ROOT}/project \
     DBT_TARGET_PATH=/tmp/dbt/target \
     DBT_LOG_PATH=/tmp/dbt/logs \
     HOME=/tmp

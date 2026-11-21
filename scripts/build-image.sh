@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the dbt runner's image (see Dockerfile):
+# Build the dbt runner's image (see runner/Dockerfile):
 #
 #   scripts/build-image.sh <tag>
 #
@@ -12,4 +12,4 @@ mkdir -p build
 uv export --frozen --no-dev --no-emit-project --format requirements.txt --quiet > build/requirements.txt
 # Lambda accepts a single image manifest only, not the index BuildKit makes when it attaches
 # provenance attestations, so don't attach them.
-BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker build --platform linux/amd64 --tag "$tag" .
+BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker build --platform linux/amd64 --file runner/Dockerfile --tag "$tag" .
