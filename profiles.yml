@@ -1,0 +1,16 @@
+# Where dbt runs: Athena, in one environment's workgroup and bucket. The environment's
+# values come from environment variables (set by the dbt Lambda, or by scripts/dbt.sh
+# locally), so the same profile serves dev and prod.
+data_simulator_analytics:
+  target: default
+  outputs:
+    default:
+      type: athena
+      region_name: us-east-2
+      database: awsdatacatalog
+      # The environment's prefix; each layer's models go to <prefix>_<layer>.
+      schema: "{{ env_var('DBT_SCHEMA_PREFIX') }}"
+      work_group: "{{ env_var('DBT_ATHENA_WORKGROUP') }}"
+      s3_staging_dir: "s3://{{ env_var('DBT_WAREHOUSE_BUCKET') }}/athena-results/"
+      s3_data_dir: "s3://{{ env_var('DBT_WAREHOUSE_BUCKET') }}/tables/"
+      threads: 4

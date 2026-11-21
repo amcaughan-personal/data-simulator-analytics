@@ -1,0 +1,23 @@
+sources:
+  - name: raw
+    description: >
+      The raw tables data-simulator-elt lands from the data-simulator API: rows exactly as the
+      API returned them, timestamps as ISO 8601 strings. Both environments read production's.
+    database: awsdatacatalog
+    schema: data_simulator_elt_raw
+    tables:
+      - name: transactions
+        description: Card transactions, one file per hour, partitioned by dt and hour.
+        config:
+          # Ingest lands each hour five minutes after it ends.
+          loaded_at_field: from_iso8601_timestamp("timestamp")
+          freshness:
+            warn_after: {count: 3, period: hour}
+            error_after: {count: 6, period: hour}
+      - name: merchants
+        description: A full snapshot of the merchants each day, partitioned by snapshot_date.
+        config:
+          loaded_at_field: cast(date(snapshot_date) as timestamp)
+          freshness:
+            warn_after: {count: 30, period: hour}
+            error_after: {count: 54, period: hour}

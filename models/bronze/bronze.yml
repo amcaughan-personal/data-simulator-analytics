@@ -1,0 +1,16 @@
+models:
+  - name: bronze_transactions
+    description: Raw transactions with proper types and names, one row per raw row.
+    columns:
+      - name: transaction_id
+        data_tests: [not_null]
+      - name: event_at
+        description: When the transaction happened (UTC).
+        data_tests: [not_null]
+  - name: bronze_merchants
+    description: Every daily merchants snapshot, with proper types.
+    columns:
+      - name: merchant_id
+        data_tests: [not_null]
+      - name: snapshot_date
+        data_tests: [not_null]

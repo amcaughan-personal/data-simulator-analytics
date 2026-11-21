@@ -1,0 +1,51 @@
+models:
+  - name: gold_daily_category_metrics
+    description: Per complete day and merchant category, volume, declines and money moved.
+  - name: gold_hourly_pattern
+    description: Transactions and average amount by hour of the day (UTC), per merchant category.
+  - name: gold_merchant_performance
+    description: Each merchant over the last 30 complete days.
+    columns:
+      - name: merchant_id
+        data_tests: [unique, not_null]
+  - name: gold_card_testing
+    description: Daily precision and recall of a simple card-testing rule against the API's labels.
+    columns:
+      - name: day
+        data_tests: [unique, not_null]
+
+unit_tests:
+  - name: decline_rate_counts_declines_over_all_transactions
+    model: gold_daily_category_metrics
+    given:
+      - input: ref('silver_transactions')
+        rows:
+          - {transaction_id: 1, event_at: "2026-11-01 09:00:00", merchant_category: grocery, is_approved: true, amount: 10.0}
+          - {transaction_id: 2, event_at: "2026-11-01 10:00:00", merchant_category: grocery, is_approved: true, amount: 30.0}
+          - {transaction_id: 3, event_at: "2026-11-01 11:00:00", merchant_category: grocery, is_approved: true, amount: 20.0}
+          - {transaction_id: 4, event_at: "2026-11-01 12:00:00", merchant_category: grocery, is_approved: false, amount: 40.0}
+          # The latest day is incomplete, so it's left out.
+          - {transaction_id: 5, event_at: "2026-11-02 01:00:00", merchant_category: grocery, is_approved: false, amount: 5.0}
+    expect:
+      rows:
+        - {day: "2026-11-01", merchant_category: grocery, transactions: 4, approved: 3, declined: 1, decline_rate: 0.25, approved_amount: 60.0, average_amount: 25.0}
+
+  - name: card_testing_precision_and_recall
+    model: gold_card_testing
+    given:
+      - input: ref('silver_transactions')
+        rows:
+          # caught (flagged, really card testing)
+          - {transaction_id: 1, event_at: "2026-11-01 09:00:00", amount: 1.0, is_card_testing: true}
+          # false alarm: a genuine charge under $1
+          - {transaction_id: 2, event_at: "2026-11-01 10:00:00", amount: 0.8, is_card_testing: false}
+          # missed: card testing above the threshold
+          - {transaction_id: 3, event_at: "2026-11-01 11:00:00", amount: 2.0, is_card_testing: true}
+          - {transaction_id: 4, event_at: "2026-11-01 12:00:00", amount: 50.0, is_card_testing: false}
+          # a day with nothing flagged and no card testing: precision and recall are undefined
+          - {transaction_id: 5, event_at: "2026-11-02 12:00:00", amount: 50.0, is_card_testing: false}
+          - {transaction_id: 6, event_at: "2026-11-03 01:00:00", amount: 50.0, is_card_testing: false}
+    expect:
+      rows:
+        - {day: "2026-11-01", flagged: 2, card_testing: 2, caught: 1, precision: 0.5, recall: 0.5}
+        - {day: "2026-11-02", flagged: 0, card_testing: 0, caught: 0, precision: null, recall: null}
