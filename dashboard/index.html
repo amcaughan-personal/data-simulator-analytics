@@ -34,7 +34,8 @@
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-width: 0; }
     .wide { grid-column: 1 / -1; }
     .card-head { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-    .tiles { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-top: 16px; }
+    .tiles-caption { margin: 16px 0 0; }
+    .tiles { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-top: 8px; }
     .tile .value { font-size: 1.8rem; font-weight: 600; }
     .chart { width: 100%; }
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
@@ -53,7 +54,7 @@
   <p class="muted">
     A synthetic card-payments business: 70 merchants in four categories. Data through
     <strong id="latest-day">…</strong>; refreshed <span id="built-at">…</span>.
-    Hover over a chart for details; click a legend entry to highlight it.
+    Hover over a chart for details; click legend entries to highlight categories, and again to clear.
   </p>
 
   <section class="filters" aria-label="Filters for the whole page">
@@ -75,7 +76,8 @@
     </label>
   </section>
 
-  <section class="tiles" aria-label="The latest complete day">
+  <p class="muted tiles-caption" id="tiles-caption"></p>
+  <section class="tiles" aria-label="Totals for the selected period and category">
     <div class="card tile"><div class="muted">Transactions</div><div class="value" id="kpi-transactions">…</div></div>
     <div class="card tile"><div class="muted">Approved value</div><div class="value" id="kpi-approved">…</div></div>
     <div class="card tile"><div class="muted">Decline rate</div><div class="value" id="kpi-decline">…</div></div>
@@ -169,11 +171,11 @@
   const HOURLY = {
     average_transactions: {
       title: "Transactions", format: ",.1f",
-      caption: "Transactions in each hour (UTC), averaged over the days in the period.",
+      caption: "Transactions in each hour (UTC), averaged over every day so far (the period doesn't apply here).",
     },
     relative_amount: {
       title: "Spend vs. average", format: "+.0%",
-      caption: "The average charge in each hour, relative to that category's daily average "
+      caption: "The average charge in each hour (UTC, over every day so far), relative to that category's daily average "
         + "(travel charges are ~20x restaurants', so each category is compared with itself). "
         + "Restaurant bills peak in the evening.",
     },
@@ -188,7 +190,8 @@
     background: null,
     config: { view: { stroke: null }, legend: { orient: "bottom", title: null }, axis: { grid: true, gridOpacity: 0.3 } },
   };
-  const highlight = [{ name: "pick", select: { type: "point", fields: ["merchant_category"] }, bind: "legend" }];
+  // Each click on a legend entry adds or removes that category; with none picked, all show.
+  const highlight = [{ name: "pick", select: { type: "point", fields: ["merchant_category"], toggle: "true" }, bind: "legend" }];
   const categories = { field: "merchant_category", type: "nominal", title: "Category", scale: { scheme: "tableau10" } };
   const faded = { condition: { param: "pick", value: 1 }, value: 0.15 };
   // Days are UTC dates; read and label them in UTC, one tick per day at most, so viewers in
@@ -211,8 +214,14 @@
     return { category, firstDay, latest: days.at(-1), inCategory, inPeriod: (row) => row.day >= firstDay };
   }
 
-  function showTiles({ latest, inCategory }) {
-    const rows = tables.gold_daily_category_metrics.filter((row) => row.day === latest && inCategory(row));
+  const shortDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  const dayName = (day) => shortDate.format(new Date(day + "T00:00:00Z"));
+
+  function showTiles({ category, firstDay, latest, inCategory, inPeriod }) {
+    const rows = tables.gold_daily_category_metrics.filter((row) => inCategory(row) && inPeriod(row));
+    const period = $("period").selectedOptions[0].text;
+    const which = category === "all" ? "all categories" : category;
+    $("tiles-caption").textContent = `${period} (${dayName(firstDay)}–${dayName(latest)}), ${which}:`;
     const total = (field) => rows.reduce((sum, row) => sum + row[field], 0);
     $("kpi-transactions").textContent = whole.format(total("transactions"));
     $("kpi-approved").textContent = money.format(total("approved_amount"));
