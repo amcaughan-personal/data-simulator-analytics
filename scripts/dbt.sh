@@ -5,7 +5,7 @@
 #   scripts/dbt.sh dev build
 #   scripts/dbt.sh dev run --select gold_card_testing
 #
-# Sets the variables profiles.yml reads, from the environment's names.
+# Sets the variables dbt/profiles.yml reads, from the environment's names.
 set -euo pipefail
 
 env="$1"
@@ -22,4 +22,4 @@ export DBT_ATHENA_WORKGROUP="$name"
 export DBT_WAREHOUSE_BUCKET="$name-warehouse-$account"
 
 cd "$(dirname "$0")/.."
-exec uv run dbt "$@" --profiles-dir .
+exec uv run dbt "$@" --project-dir dbt --profiles-dir dbt

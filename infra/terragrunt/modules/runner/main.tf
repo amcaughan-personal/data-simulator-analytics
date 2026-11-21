@@ -1,5 +1,5 @@
 # The dbt runner: a container Lambda that runs `dbt source freshness` and `dbt build` once a
-# day (see src/runner), reading the ELT's raw tables and writing this environment's layers.
+# day (see runner/), reading the ELT's raw tables and writing this environment's layers.
 #
 # Terraform owns the function's configuration; CI owns its image. Terraform sets the image
 # only when it creates the function. Deploys push a new image and point the function at it.

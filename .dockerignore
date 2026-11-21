@@ -1,11 +1,10 @@
 # Docker builds see only what's listed here: .tool-versions for the dev container
-# (.devcontainer), and the dbt project and its runner for the Lambda image (Dockerfile).
+# (.devcontainer), and the dbt project and its runner for the Lambda image (runner/Dockerfile).
 *
 !.tool-versions
 !build/requirements.txt
-!dbt_project.yml
-!profiles.yml
-!models
-!data-tests
-!src/runner
+!dbt
+!runner
 **/__pycache__
+dbt/target
+dbt/logs

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from dbt.cli.main import dbtRunner
 
-PROJECT_DIR = Path(__file__).parent.parent
+PROJECT_DIR = Path(__file__).parent.parent / "dbt"
 
 
 def test_project_parses(monkeypatch, tmp_path):

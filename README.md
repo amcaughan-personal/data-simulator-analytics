@@ -134,11 +134,10 @@ plus the Terraform, Terragrunt and uv versions from `.tool-versions`.
 ## Repository layout
 
 ```
-models/            dbt models: sources.yml, bronze/, silver/, gold/ (each with its tests)
-data-tests/        SQL data tests that span a model
-src/runner/        the Lambda that runs dbt
+dbt/               the dbt project: models/ (sources.yml, bronze/, silver/, gold/, each with its
+                   tests), data-tests/ (tests that span a model), profiles.yml
+runner/            the Lambda that runs dbt, and its image (Dockerfile)
 dashboard/         the dashboard page and its build script
-Dockerfile         the runner's image
 tests/             Python tests (the project parses; the runner's behaviour)
 scripts/           run dbt locally; build, deploy and smoke-test the runner
 infra/terragrunt/  Terraform/Terragrunt for AWS

@@ -8,7 +8,7 @@ run then fails, which is what the alarm watches. An event with `args` runs those
 arguments instead, e.g. `{"args": ["build", "--full-refresh"]}` to rebuild every table.
 
 dbt reads the environment's workgroup, bucket and schema prefix from environment variables
-(see profiles.yml) and writes its working files under /tmp (the only writable path).
+(see dbt/profiles.yml) and writes its working files under /tmp (the only writable path).
 """
 
 import logging
