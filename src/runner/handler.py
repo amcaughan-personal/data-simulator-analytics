@@ -12,10 +12,22 @@ dbt reads the environment's workgroup, bucket and schema prefix from environment
 """
 
 import logging
+import multiprocessing
+import multiprocessing.context
 import os
+import threading
 from typing import Any
 
-from dbt.cli.main import dbtRunner
+# Lambda has no /dev/shm, so multiprocessing can't create its locks, and dbt creates them
+# while it parses the project and connects. dbt runs everything in threads of this one
+# process, where ordinary thread locks do the same job. This has to happen before dbt is
+# imported, since some of its classes take multiprocessing.Lock as a default.
+multiprocessing.Lock = threading.Lock
+multiprocessing.RLock = threading.RLock
+multiprocessing.context.BaseContext.Lock = lambda self: threading.Lock()
+multiprocessing.context.BaseContext.RLock = lambda self: threading.RLock()
+
+from dbt.cli.main import dbtRunner  # noqa: E402 (after the lock change above)
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
