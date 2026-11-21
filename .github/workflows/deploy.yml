@@ -1,0 +1,91 @@
+name: deploy
+
+# Ships the dbt runner: build the image once and push it (tagged with the commit), point dev
+# at it and run dbt once as a smoke test, then point production at the same image (after
+# approval, if the production environment requires it) and run it again.
+#
+# Infrastructure (Terraform) is applied by hand; this only ships the image. To roll back,
+# re-run an earlier run of this workflow. Each environment's DEPLOY_ROLE_ARN, FUNCTION_NAME
+# and REPOSITORY_URL come from that environment's github-deploy stack, via personal-infra.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "models/**"
+      - "data-tests/**"
+      - "dbt_project.yml"
+      - "profiles.yml"
+      - "src/runner/**"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "scripts/build-image.sh"
+      - "scripts/deploy.sh"
+      - "scripts/smoke-test.sh"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time, in order; never cancel one halfway through.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  dev:
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write # to sign in to AWS as this environment's deploy role
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: us-east-2
+      - name: Build and push the image
+        id: push
+        env:
+          REPOSITORY_URL: ${{ vars.REPOSITORY_URL }}
+        run: |
+          set -euo pipefail
+          scripts/build-image.sh "$REPOSITORY_URL:$GITHUB_SHA"
+          aws ecr get-login-password | docker login --username AWS --password-stdin "${REPOSITORY_URL%%/*}"
+          docker push --quiet "$REPOSITORY_URL:$GITHUB_SHA"
+          echo "image=$(docker inspect --format '{{index .RepoDigests 0}}' "$REPOSITORY_URL:$GITHUB_SHA")" >> "$GITHUB_OUTPUT"
+      - run: scripts/deploy.sh "$FUNCTION_NAME" "$IMAGE"
+        env:
+          FUNCTION_NAME: ${{ vars.FUNCTION_NAME }}
+          IMAGE: ${{ steps.push.outputs.image }}
+      - run: scripts/smoke-test.sh "$FUNCTION_NAME"
+        env:
+          FUNCTION_NAME: ${{ vars.FUNCTION_NAME }}
+
+  production:
+    needs: dev
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: us-east-2
+      - run: scripts/deploy.sh "$FUNCTION_NAME" "$IMAGE"
+        env:
+          FUNCTION_NAME: ${{ vars.FUNCTION_NAME }}
+          IMAGE: ${{ needs.dev.outputs.image }}
+      - run: scripts/smoke-test.sh "$FUNCTION_NAME"
+        env:
+          FUNCTION_NAME: ${{ vars.FUNCTION_NAME }}

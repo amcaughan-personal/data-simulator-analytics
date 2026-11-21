@@ -28,6 +28,7 @@ updates:
   - package-ecosystem: docker
     directories:
       - /.devcontainer
+      - / # the dbt runner's image (Dockerfile)
     schedule:
       interval: weekly
     cooldown:
