@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Payments Dashboard</title>
+  <meta name="description" content="Daily metrics from a synthetic payments business, built by dbt on Athena from data the data-simulator ELT pulls hourly.">
+  <style>
+    :root {
+      --bg: #f7f7f5; --surface: #ffffff; --text: #1d1d1f; --muted: #6b6b70; --border: #e2e2de;
+      --accent: #2f6fdf;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #141416; --surface: #1d1d20; --text: #ececee; --muted: #a0a0a8; --border: #2e2e33; --accent: #7aa7ff; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 1100px; margin: 0 auto; padding: 32px 16px 64px; }
+    h1 { font-size: 1.7rem; margin: 0 0 4px; }
+    h2 { font-size: 1.15rem; margin: 0 0 4px; }
+    p { margin: 0 0 12px; }
+    .muted { color: var(--muted); }
+    a { color: var(--accent); }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); margin-top: 16px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-width: 0; }
+    .wide { grid-column: 1 / -1; }
+    .tiles { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-top: 24px; }
+    .tile .value { font-size: 1.8rem; font-weight: 600; }
+    .chart { width: 100%; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+    td.number, th.number { text-align: right; font-variant-numeric: tabular-nums; }
+    .table-scroll { overflow-x: auto; }
+    footer { margin-top: 32px; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/vega@6.4.0/build/vega.min.js" integrity="sha384-VKdcJr3ZaBIJMbVcopTAI/JEuUkSY6qnwVu9iLuw0DnQ9gQ1JjsfZJhXFQAgNi43" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vega-lite@6.5.0/build/vega-lite.min.js" integrity="sha384-pV2l7nzmyxZh02knvUH7N8zvtyCYsYiGt+SsE/emG/dFiBI6G0YJZFZ2FzEX72P3" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vega-embed@7.3.0/build/vega-embed.min.js" integrity="sha384-Muy1QRxYFeNrA1zShc1KtN4OfipkR/61gt+HWqN57c1Zxu3Oe16TsilsruVVjfKL" crossorigin="anonymous"></script>
+</head>
+<body>
+<main>
+  <h1>Payments dashboard</h1>
+  <p class="muted">
+    A synthetic card-payments business: 70 merchants in four categories. Data through
+    <strong id="latest-day">…</strong>; refreshed <span id="built-at">…</span>.
+  </p>
+
+  <section class="tiles" aria-label="The latest complete day">
+    <div class="card tile"><div class="muted">Transactions</div><div class="value" id="kpi-transactions">…</div></div>
+    <div class="card tile"><div class="muted">Approved value</div><div class="value" id="kpi-approved">…</div></div>
+    <div class="card tile"><div class="muted">Decline rate</div><div class="value" id="kpi-decline">…</div></div>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <h2>Transactions per day</h2>
+      <p class="muted">By merchant category.</p>
+      <div class="chart" id="daily-volume"></div>
+    </div>
+    <div class="card">
+      <h2>Decline rate per day</h2>
+      <p class="muted">Declined transactions as a share of all, by category.</p>
+      <div class="chart" id="daily-declines"></div>
+    </div>
+    <div class="card">
+      <h2>An average day</h2>
+      <p class="muted">Transactions in each hour (UTC), averaged over every day so far.</p>
+      <div class="chart" id="hourly-volume"></div>
+    </div>
+    <div class="card">
+      <h2>Spend by hour</h2>
+      <p class="muted">Average charge in each hour, relative to that category's daily average. Restaurant bills peak in the evening.</p>
+      <div class="chart" id="hourly-amount"></div>
+    </div>
+    <div class="card wide">
+      <h2>Catching card testing</h2>
+      <p class="muted">
+        Fraudsters test stolen cards with tiny charges. A simple rule flags every charge of $1.00
+        or less; the data's labels say which charges really were tests. <strong>Precision</strong>
+        is the share of flagged charges that were tests; <strong>recall</strong> is the share of tests
+        the rule flagged. It never raises a false alarm, but misses the probes above $1.
+      </p>
+      <div class="chart" id="card-testing"></div>
+    </div>
+    <div class="card wide">
+      <h2>Merchants, last 30 days</h2>
+      <p class="muted">The 15 merchants with the most money approved.</p>
+      <div class="table-scroll"><table id="merchants"></table></div>
+    </div>
+  </section>
+
+  <footer class="muted">
+    <p>
+      <strong>How it's built.</strong>
+      <a href="https://github.com/amcaughan-personal/data-simulator-api">data-simulator-api</a>
+      generates the data;
+      <a href="https://github.com/amcaughan-personal/data-simulator-elt">data-simulator-elt</a>
+      pulls it into S3 every hour;
+      <a href="https://github.com/amcaughan-personal/data-simulator-analytics">data-simulator-analytics</a>
+      models and tests it with dbt on Athena every day, then rebuilds this page.
+    </p>
+  </footer>
+</main>
+
+<script>
+  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  const whole = new Intl.NumberFormat("en-US");
+  const percent = new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: 1 });
+
+  // Shared look for every chart: fills its card, follows light/dark mode, one colour per category.
+  const base = {
+    $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+    width: "container",
+    height: 220,
+    background: null,
+    config: { view: { stroke: null }, legend: { orient: "bottom", title: null }, axis: { grid: true, gridOpacity: 0.3 } },
+  };
+  const categories = { field: "merchant_category", type: "nominal", title: "Category", scale: { scheme: "tableau10" } };
+
+  function chart(id, spec, values) {
+    return vegaEmbed("#" + id, { ...base, ...spec, data: { values } }, { actions: false, theme: dark ? "dark" : undefined });
+  }
+
+  function show({ built_at, tables }) {
+    const daily = tables.gold_daily_category_metrics;
+    const latest = daily.map((row) => row.day).sort().at(-1);
+    const today = daily.filter((row) => row.day === latest);
+    const total = (field) => today.reduce((sum, row) => sum + row[field], 0);
+
+    document.getElementById("latest-day").textContent = latest;
+    document.getElementById("built-at").textContent = built_at;
+    document.getElementById("kpi-transactions").textContent = whole.format(total("transactions"));
+    document.getElementById("kpi-approved").textContent = money.format(total("approved_amount"));
+    document.getElementById("kpi-decline").textContent = percent.format(total("declined") / total("transactions"));
+
+    chart("daily-volume", {
+      mark: { type: "line", point: true },
+      encoding: { x: { field: "day", type: "temporal", title: null }, y: { field: "transactions", type: "quantitative", title: null }, color: categories },
+    }, daily);
+
+    chart("daily-declines", {
+      mark: { type: "line", point: true },
+      encoding: {
+        x: { field: "day", type: "temporal", title: null },
+        y: { field: "decline_rate", type: "quantitative", title: null, axis: { format: "%" } },
+        color: categories,
+      },
+    }, daily);
+
+    chart("hourly-volume", {
+      mark: "line",
+      encoding: {
+        x: { field: "hour_of_day", type: "quantitative", title: "Hour (UTC)", scale: { domain: [0, 23] } },
+        y: { field: "average_transactions", type: "quantitative", title: null },
+        color: categories,
+      },
+    }, tables.gold_hourly_pattern);
+
+    // Categories spend very different amounts (travel is ~20x restaurants), so compare each
+    // hour with its own category's average: 1.1 means 10% above that category's usual charge.
+    chart("hourly-amount", {
+      transform: [
+        { joinaggregate: [{ op: "mean", field: "average_amount", as: "category_average" }], groupby: ["merchant_category"] },
+        { calculate: "datum.average_amount / datum.category_average - 1", as: "relative" },
+      ],
+      mark: "line",
+      encoding: {
+        x: { field: "hour_of_day", type: "quantitative", title: "Hour (UTC)", scale: { domain: [0, 23] } },
+        y: { field: "relative", type: "quantitative", title: null, axis: { format: "+%" } },
+        color: categories,
+      },
+    }, tables.gold_hourly_pattern);
+
+    chart("card-testing", {
+      transform: [{ fold: ["precision", "recall"], as: ["measure", "value"] }, { filter: "datum.value !== null" }],
+      mark: { type: "line", point: true },
+      encoding: {
+        x: { field: "day", type: "temporal", title: null },
+        y: { field: "value", type: "quantitative", title: null, scale: { domain: [0, 1] }, axis: { format: "%" } },
+        color: { field: "measure", type: "nominal", title: null, scale: { range: ["#2f9e6e", "#e07b39"] } },
+      },
+    }, tables.gold_card_testing);
+
+    const merchants = [...tables.gold_merchant_performance]
+      .sort((a, b) => b.approved_amount - a.approved_amount)
+      .slice(0, 15);
+    const table = document.getElementById("merchants");
+    table.innerHTML = "<thead><tr><th>Merchant</th><th>Category</th><th>City</th><th>Risk</th>"
+      + "<th class='number'>Transactions</th><th class='number'>Approved</th><th class='number'>Declined</th></tr></thead>";
+    const body = table.createTBody();
+    for (const m of merchants) {
+      const row = body.insertRow();
+      for (const [text, numeric] of [
+        [m.merchant_id], [m.merchant_category], [m.city], [m.risk_tier],
+        [whole.format(m.transactions), true], [money.format(m.approved_amount), true],
+        [m.decline_rate === null ? "–" : percent.format(m.decline_rate), true],
+      ]) {
+        const cell = row.insertCell();
+        cell.textContent = text;
+        if (numeric) cell.className = "number";
+      }
+    }
+  }
+
+  fetch("data.json").then((response) => response.json()).then(show);
+</script>
+</body>
+</html>

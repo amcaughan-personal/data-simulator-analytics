@@ -1,0 +1,56 @@
+name: dashboard
+
+# Rebuilds the dashboard on GitHub Pages from production's gold tables: every day after the
+# dbt run (07:30 UTC), and whenever the page changes. The refresh job runs in the
+# `dashboard` environment, the only one whose AWS role can query the gold tables.
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "dashboard/**"
+      - "scripts/export-gold.sh"
+      - ".github/workflows/dashboard.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dashboard
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: dashboard
+    permissions:
+      contents: read
+      id-token: write # to sign in to AWS as the dashboard's read-only role
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.DASHBOARD_ROLE_ARN }}
+          aws-region: us-east-2
+      - run: scripts/export-gold.sh data-simulator-analytics data_simulator_analytics_gold build/gold
+      - run: uv run --no-sync python dashboard/build.py build/gold build/site
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: build/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

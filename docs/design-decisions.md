@@ -9,6 +9,7 @@ Why the analytics side is built the way it is, and what each choice gives up.
 - [dbt runs in a container Lambda](#dbt-runs-in-a-container-lambda)
 - [Tests run with every build; CI only parses](#tests-run-with-every-build-ci-only-parses)
 - [One image, one registry](#one-image-one-registry)
+- [A static dashboard, rebuilt daily](#a-static-dashboard-rebuilt-daily)
 
 ## dbt on Athena
 
@@ -85,3 +86,19 @@ share; dev, then prod, are pointed at its digest.
 
 **Why:** prod runs exactly what dev tested, with nothing rebuilt or copied. Only dev's deploy
 role can push; prod's can only read the image.
+
+## A static dashboard, rebuilt daily
+
+**Decision:** the dashboard is one HTML page on GitHub Pages with the gold tables baked in as
+JSON, rebuilt by a GitHub Actions workflow every day after the dbt run. Charts are Vega-Lite
+specs; the only code is a short Python build script and a little JavaScript to fill the page.
+
+**Why:** the data changes once a day, so a static page shows the same thing a live BI tool would,
+with nothing to host, secure or pay for. Viewers never touch AWS: the workflow's role can only
+query production's gold tables. Vega-Lite charts are declarative JSON, readable without knowing
+a charting library. A BI-as-code framework was considered, but the one that fitted best
+(Evidence's open-source framework) has been deprecated in favour of a hosted product.
+
+**Trade-off:** no interactive filtering beyond tooltips, and the page is as fresh as its last
+build (it shows the date). If the scheduled workflow stopped (GitHub disables schedules after
+60 days without repository activity), the page would keep showing its last data.

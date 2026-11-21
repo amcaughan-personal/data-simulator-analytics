@@ -4,6 +4,8 @@ Turns the raw payments data that
 [data-simulator-elt](https://github.com/amcaughan-personal/data-simulator-elt) lands in S3 into
 tested models and a dashboard: dbt on Athena, in three layers.
 
+**Dashboard:** https://amcaughan-personal.github.io/data-simulator-analytics/ (rebuilt daily).
+
 ```
 EventBridge Scheduler (daily) ─► dbt runner (container Lambda) ─► Athena
      ELT raw tables (Glue) ─► bronze ─► silver ─► gold ─► dashboard
@@ -38,6 +40,23 @@ Why it's built this way: [design decisions](docs/design-decisions.md).
 CI also parses the project on every pull request (`tests/`), which catches broken refs, YAML
 and Jinja without a warehouse.
 
+## Dashboard
+
+[`dashboard/`](dashboard) is one static page: `build.py` turns the gold tables (exported as CSV
+by `scripts/export-gold.sh`) into `data.json`, and `index.html` draws the charts with
+[Vega-Lite](https://vega.github.io/vega-lite/), loaded from a CDN at pinned versions with
+integrity hashes. [The dashboard workflow](.github/workflows/dashboard.yml) rebuilds it every day
+at 08:00 UTC, after the dbt run, and publishes it to GitHub Pages. Its AWS role can only query
+production's gold tables.
+
+To build it locally from your machine:
+
+```bash
+scripts/export-gold.sh data-simulator-analytics data_simulator_analytics_gold build/gold
+uv run python dashboard/build.py build/gold build/site
+python3 -m http.server -d build/site   # http://localhost:8000
+```
+
 ## Run it locally
 
 ```bash
@@ -63,6 +82,7 @@ the ELT's production raw tables.
 | `runner` | the dbt runner: a container Lambda (one run at a time) that runs `dbt source freshness` and `dbt build` daily at 07:30 UTC, allowed to read the ELT's raw zone and write this environment's layers; in prod, an alarm that emails when a run fails |
 | `github-deploy` | the role GitHub Actions deploys as (only that GitHub environment's jobs can assume it), and the values the deploy workflow reads |
 | `shared/registry` | one ECR repository for the runner's image, used by both environments (immutable tags, the last two images kept) |
+| `prod/dashboard-access` | the role the dashboard workflow signs in as: only the repo's `dashboard` GitHub environment can assume it, and it can only query the gold tables |
 
 Cost: about $0.30 a month. Athena bills $5/TB scanned with a 10 MB minimum per query, so a
 daily build (~40 queries) in each environment costs about $0.15 a month; the image costs
@@ -117,6 +137,7 @@ plus the Terraform, Terragrunt and uv versions from `.tool-versions`.
 models/            dbt models: sources.yml, bronze/, silver/, gold/ (each with its tests)
 data-tests/        SQL data tests that span a model
 src/runner/        the Lambda that runs dbt
+dashboard/         the dashboard page and its build script
 Dockerfile         the runner's image
 tests/             Python tests (the project parses; the runner's behaviour)
 scripts/           run dbt locally; build, deploy and smoke-test the runner
