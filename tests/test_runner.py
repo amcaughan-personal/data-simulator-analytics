@@ -58,3 +58,14 @@ def test_an_event_can_run_other_dbt_arguments(dbt):
     assert fake.invocations == [
         ["build", "--full-refresh", "--project-dir", "/project", "--profiles-dir", "/project"]
     ]
+
+
+def test_dbt_locks_work_without_shared_memory():
+    """Lambda has no /dev/shm; the runner makes multiprocessing hand out thread locks."""
+    import multiprocessing
+
+    locks = [multiprocessing.Lock(), multiprocessing.RLock(), multiprocessing.get_context("spawn").RLock()]
+    for lock in locks:
+        with lock:
+            pass
+    assert all(type(lock).__module__ in ("_thread", "threading") for lock in locks)
