@@ -14,9 +14,10 @@
   "remoteEnv": {
     "AWS_PROFILE": "default"
   },
+  "postCreateCommand": "uv sync",
   "customizations": {
     "vscode": {
-      "extensions": []
+      "extensions": ["hashicorp.terraform", "ms-python.python", "charliermarsh.ruff"]
     }
   }
 }
