@@ -31,11 +31,16 @@ dependency "registry" {
 }
 
 inputs = {
-  function_name      = dependency.runner.outputs.function_name
-  function_arn       = dependency.runner.outputs.function_arn
-  repository_url     = dependency.registry.outputs.repository_url
-  repository_arn     = dependency.registry.outputs.repository_arn
-  github_repository  = "data-simulator-analytics"
+  function_name     = dependency.runner.outputs.function_name
+  function_arn      = dependency.runner.outputs.function_arn
+  repository_url    = dependency.registry.outputs.repository_url
+  repository_arn    = dependency.registry.outputs.repository_arn
+  github_repository = "data-simulator-analytics"
+
+  # GitHub's immutable subject: the org and repo by name and numeric ID. A repo deleted and
+  # recreated under the same name gets a new ID, so its tokens can't assume this role.
+  oidc_subject_prefix = "repo:amcaughan-personal@271645414/data-simulator-analytics@1466249789"
+
   github_environment = local.env.github_environment
   push_images        = false # the dev job builds and pushes; prod uses the same image
 }
