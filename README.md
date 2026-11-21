@@ -5,8 +5,11 @@ Turns the raw payments data that
 tested models and a dashboard: dbt on Athena, in three layers.
 
 ```
-ELT raw tables (Glue) ─► bronze ─► silver ─► gold ─► dashboard
+EventBridge Scheduler (daily) ─► dbt runner (container Lambda) ─► Athena
+     ELT raw tables (Glue) ─► bronze ─► silver ─► gold ─► dashboard
 ```
+
+Why it's built this way: [design decisions](docs/design-decisions.md).
 
 | Layer | What it holds |
 |---|---|
@@ -57,6 +60,50 @@ the ELT's production raw tables.
 | Stack | What it holds |
 |---|---|
 | `warehouse` | an S3 bucket for the models' tables and Athena's query results (kept a week), a Glue database per layer, and an Athena workgroup that caps how much one query may scan (1 GiB) |
+| `runner` | the dbt runner: a container Lambda (one run at a time) that runs `dbt source freshness` and `dbt build` daily at 07:30 UTC, allowed to read the ELT's raw zone and write this environment's layers; in prod, an alarm that emails when a run fails |
+| `github-deploy` | the role GitHub Actions deploys as (only that GitHub environment's jobs can assume it), and the values the deploy workflow reads |
+| `shared/registry` | one ECR repository for the runner's image, used by both environments (immutable tags, the last two images kept) |
+
+Cost: about $0.30 a month. Athena bills $5/TB scanned with a 10 MB minimum per query, so a
+daily build (~40 queries) in each environment costs about $0.15 a month; the image costs
+about $0.05 a month to store; prod's alarm is $0.10. The Lambda stays within the free tier.
+
+## Deploys
+
+Infrastructure is applied by hand from a reviewed plan, dev before prod. The runner's image
+ships through [the deploy workflow](.github/workflows/deploy.yml) on every merge that changes
+the models or the runner: build the image once, point dev at it and run dbt once, then the same
+for prod. Rolling back is re-running an earlier deploy.
+
+## Operations
+
+**The alarm** (`data-simulator-analytics-runner-errors`, prod only) emails when the daily run
+fails: stale sources, a failing test, or a model error. The Lambda's logs (dbt's own output)
+name the failing nodes. dbt skips the models downstream of a failing test, so they keep their
+previous data until it's fixed; everything else is rebuilt as usual.
+
+**Running dbt by hand** in an environment, e.g. rebuilding every table after the raw data
+was replayed:
+
+```bash
+aws lambda invoke --function-name data-simulator-analytics-dev-runner \
+  --payload '{"args": ["build", "--full-refresh"]}' --cli-binary-format raw-in-base64-out \
+  --cli-read-timeout 900 /dev/stdout
+```
+
+or from your machine with `scripts/dbt.sh dev build --full-refresh`.
+
+**Creating the runner from scratch** needs an image before the function can exist: apply
+`shared/registry`, push a first image tagged `initial`, then apply each environment's `runner`
+and `github-deploy`.
+
+```bash
+repo=$(aws ecr describe-repositories --repository-names data-simulator-analytics-runner \
+  --query 'repositories[0].repositoryUri' --output text)
+scripts/build-image.sh "$repo:initial"
+aws ecr get-login-password | docker login --username AWS --password-stdin "${repo%%/*}"
+docker push "$repo:initial"
+```
 
 ## Development environment
 
@@ -69,9 +116,12 @@ plus the Terraform, Terragrunt and uv versions from `.tool-versions`.
 ```
 models/            dbt models: sources.yml, bronze/, silver/, gold/ (each with its tests)
 data-tests/        SQL data tests that span a model
-tests/             Python tests (the project parses)
-scripts/dbt.sh     run dbt against dev or prod
+src/runner/        the Lambda that runs dbt
+Dockerfile         the runner's image
+tests/             Python tests (the project parses; the runner's behaviour)
+scripts/           run dbt locally; build, deploy and smoke-test the runner
 infra/terragrunt/  Terraform/Terragrunt for AWS
+docs/              design decisions
 ```
 
 ## License

@@ -1,0 +1,30 @@
+variable "function_name" {
+  type = string
+}
+
+variable "function_arn" {
+  type = string
+}
+
+variable "repository_url" {
+  type = string
+}
+
+variable "repository_arn" {
+  type = string
+}
+
+variable "github_repository" {
+  description = "Repository name within the amcaughan-personal org"
+  type        = string
+}
+
+variable "github_environment" {
+  description = "The GitHub environment whose jobs may deploy (dev or production)"
+  type        = string
+}
+
+variable "push_images" {
+  description = "Whether this environment's deploys build and push the image (dev) or only use it (prod)"
+  type        = bool
+}
