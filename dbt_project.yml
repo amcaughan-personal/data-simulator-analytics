@@ -1,0 +1,27 @@
+name: data_simulator_analytics
+version: "1.0.0"
+profile: data_simulator_analytics
+
+model-paths: ["models"]
+# SQL data tests; tests/ holds the Python (pytest) tests.
+test-paths: ["data-tests"]
+
+clean-targets: ["target", "dbt_packages"]
+
+flags:
+  send_anonymous_usage_stats: false
+
+models:
+  data_simulator_analytics:
+    # Each layer has its own Glue database, <environment prefix>_<layer>: dbt appends a
+    # model's schema to the profile's.
+    bronze:
+      +schema: bronze
+      +materialized: view
+    silver:
+      +schema: silver
+      +table_type: iceberg
+    gold:
+      +schema: gold
+      +materialized: table
+      +table_type: iceberg
