@@ -90,7 +90,11 @@ about $0.05 a month to store; prod's alarm is $0.10. The Lambda stays within the
 
 ## Deploys
 
-Infrastructure is applied by hand from a reviewed plan, dev before prod. The runner's image
+Infrastructure changes get a plan comment on their pull request, and
+[terragrunt-apply](.github/workflows/terragrunt-apply.yml) applies them after merging: the shared
+registry, dev, then prod once approved (the run's summary shows prod's plan before that). It can
+create and change this repo's resources but not delete them, so a change that would destroy or
+replace anything stops there and is applied by hand. The runner's image
 ships through [the deploy workflow](.github/workflows/deploy.yml) on every merge that changes
 the models or the runner: build the image once, point dev at it and run dbt once, then the same
 for prod. Rolling back is re-running an earlier deploy.
