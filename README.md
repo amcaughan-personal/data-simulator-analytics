@@ -95,6 +95,9 @@ ships through [the deploy workflow](.github/workflows/deploy.yml) on every merge
 the models or the runner: build the image once, point dev at it and run dbt once, then the same
 for prod. Rolling back is re-running an earlier deploy.
 
+A [daily drift check](.github/workflows/drift.yml) plans `main` read-only and fails if AWS
+doesn't match it: a change made outside Terraform, or one merged but not applied yet.
+
 ## Operations
 
 **The alarm** (`data-simulator-analytics-runner-errors`, prod only) emails when the daily run
