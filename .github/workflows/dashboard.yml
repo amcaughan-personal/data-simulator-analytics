@@ -34,8 +34,9 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ vars.DASHBOARD_ROLE_ARN }}
+          role-to-assume: ${{ secrets.DASHBOARD_ROLE_ARN }}
           aws-region: us-east-2
+          mask-aws-account-id: true
       - run: scripts/export-gold.sh data-simulator-analytics data_simulator_analytics_gold build/gold
       - run: uv run --no-sync python dashboard/build.py build/gold build/site
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

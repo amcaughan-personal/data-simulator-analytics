@@ -79,7 +79,7 @@ resource "aws_iam_role_policy" "deploy" {
 }
 
 resource "aws_ssm_parameter" "variables" {
-  #checkov:skip=CKV2_AWS_34:Not secrets: a role ARN, a function name and a registry URL, which workflow logs show anyway
+  #checkov:skip=CKV2_AWS_34:Not secrets: a role ARN, a function name and a registry URL; GitHub masks the ones with the account ID in workflow logs
   for_each = {
     DEPLOY_ROLE_ARN = aws_iam_role.deploy.arn
     FUNCTION_NAME   = var.function_name

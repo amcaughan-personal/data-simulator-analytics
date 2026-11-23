@@ -38,29 +38,34 @@ jobs:
     permissions:
       contents: read
       id-token: write # to sign in to AWS as this environment's deploy role
+    # Only the digest crosses jobs: GitHub drops job outputs that contain a secret, and the
+    # repository URL is one (it contains the AWS account ID).
     outputs:
-      image: ${{ steps.push.outputs.image }}
+      digest: ${{ steps.push.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ secrets.DEPLOY_ROLE_ARN }}
           aws-region: us-east-2
+          mask-aws-account-id: true
       - name: Build and push the image
         id: push
         env:
-          REPOSITORY_URL: ${{ vars.REPOSITORY_URL }}
+          REPOSITORY_URL: ${{ secrets.REPOSITORY_URL }}
         run: |
           set -euo pipefail
           scripts/build-image.sh "$REPOSITORY_URL:$GITHUB_SHA"
           aws ecr get-login-password | docker login --username AWS --password-stdin "${REPOSITORY_URL%%/*}"
           docker push --quiet "$REPOSITORY_URL:$GITHUB_SHA"
-          echo "image=$(docker inspect --format '{{index .RepoDigests 0}}' "$REPOSITORY_URL:$GITHUB_SHA")" >> "$GITHUB_OUTPUT"
-      - run: scripts/deploy.sh "$FUNCTION_NAME" "$IMAGE"
+          image=$(docker inspect --format '{{index .RepoDigests 0}}' "$REPOSITORY_URL:$GITHUB_SHA")
+          echo "digest=${image#*@}" >> "$GITHUB_OUTPUT"
+      - run: scripts/deploy.sh "$FUNCTION_NAME" "$REPOSITORY_URL@$DIGEST"
         env:
           FUNCTION_NAME: ${{ vars.FUNCTION_NAME }}
-          IMAGE: ${{ steps.push.outputs.image }}
+          REPOSITORY_URL: ${{ secrets.REPOSITORY_URL }}
+          DIGEST: ${{ steps.push.outputs.digest }}
       - run: scripts/smoke-test.sh "$FUNCTION_NAME"
         env:
           FUNCTION_NAME: ${{ vars.FUNCTION_NAME }}
@@ -76,12 +81,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ secrets.DEPLOY_ROLE_ARN }}
           aws-region: us-east-2
-      - run: scripts/deploy.sh "$FUNCTION_NAME" "$IMAGE"
+          mask-aws-account-id: true
+      - run: scripts/deploy.sh "$FUNCTION_NAME" "$REPOSITORY_URL@$DIGEST"
         env:
           FUNCTION_NAME: ${{ vars.FUNCTION_NAME }}
-          IMAGE: ${{ needs.dev.outputs.image }}
+          REPOSITORY_URL: ${{ secrets.REPOSITORY_URL }}
+          DIGEST: ${{ needs.dev.outputs.digest }}
       - run: scripts/smoke-test.sh "$FUNCTION_NAME"
         env:
           FUNCTION_NAME: ${{ vars.FUNCTION_NAME }}
