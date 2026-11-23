@@ -80,9 +80,9 @@ the ELT's production raw tables.
 |---|---|
 | `warehouse` | an S3 bucket for the models' tables and Athena's query results (kept a week), a Glue database per layer, and an Athena workgroup that caps how much one query may scan (1 GiB) |
 | `runner` | the dbt runner: a container Lambda (one run at a time) that runs `dbt source freshness` and `dbt build` daily at 07:30 UTC, allowed to read the ELT's raw zone and write this environment's layers; in prod, an alarm that emails when a run fails |
-| `github-deploy` | the role GitHub Actions deploys as (only that GitHub environment's jobs can assume it), and the values the deploy workflow reads |
 | `shared/registry` | one ECR repository for the runner's image, used by both environments (immutable tags, the last two images kept) |
-| `prod/dashboard-access` | the role the dashboard workflow signs in as: only the repo's `dashboard` GitHub environment can assume it, and it can only query the gold tables |
+
+The roles GitHub Actions signs in as live in personal-infra (`github-ci-roles/data-simulator-analytics/`): each environment's deploy role (only that GitHub environment's jobs can assume it; dev's can push the runner image, prod's can only read it) and the dashboard's role (only the `dashboard` environment; it can only query the gold tables). Every IAM role created here carries personal-infra's permissions boundary for this repo.
 
 Cost: about $0.30 a month. Athena bills $5/TB scanned with a 10 MB minimum per query, so a
 daily build (~40 queries) in each environment costs about $0.15 a month; the image costs
@@ -134,7 +134,7 @@ If the raw files themselves are gone, the ELT re-pulls them from the API first (
 
 **Creating the runner from scratch** needs an image before the function can exist: apply
 `shared/registry`, push a first image tagged `initial`, then apply each environment's `runner`
-and `github-deploy`.
+(by hand: creating the function needs to read the image, which CI's apply role can't).
 
 ```bash
 repo=$(aws ecr describe-repositories --repository-names data-simulator-analytics-runner \
