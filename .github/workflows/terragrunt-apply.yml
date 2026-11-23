@@ -1,0 +1,66 @@
+name: terragrunt-apply
+
+# Applies infrastructure from main: the shared registry, then dev, then prod, which waits for
+# approval in the infra-production environment. The dev job also plans prod, so the run's
+# summary shows what prod will do before it's approved. A stack that would destroy or
+# replace anything stops the run and is applied locally. Output stays on the runner (this
+# repo is public); the run's summary lists the changes by address and type.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".tool-versions"
+  # Changes to this file alone (e.g. Dependabot bumping the shared workflow) don't apply
+  # anything; run it by hand to try a change to it.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shared:
+    uses: amcaughan-personal/shared-workflows/.github/workflows/terragrunt-apply.yml@ca831e0767bee9dd04d13fb18444c69c689ade6f # v2.3.0
+    permissions:
+      contents: read
+      id-token: write # to sign in to AWS as the apply role
+    with:
+      terragrunt_working_dir: infra/terragrunt/live/shared
+      environment: infra-dev
+      aws_region: us-east-2
+      report_title: "Terragrunt apply: shared"
+    secrets:
+      aws_role_arn: ${{ secrets.APPLY_ROLE_ARN }}
+
+  dev:
+    needs: shared
+    uses: amcaughan-personal/shared-workflows/.github/workflows/terragrunt-apply.yml@ca831e0767bee9dd04d13fb18444c69c689ade6f # v2.3.0
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      terragrunt_working_dir: infra/terragrunt/live/dev
+      environment: infra-dev
+      aws_region: us-east-2
+      report_title: "Terragrunt apply: dev"
+      # Plan prod read-only after dev applies, so its plan is in this run's summary when
+      # the prod job asks for approval.
+      preview_terragrunt_working_dir: infra/terragrunt/live/prod
+      preview_title: "Prod plan (applies after approval)"
+    secrets:
+      aws_role_arn: ${{ secrets.APPLY_ROLE_ARN }}
+
+  prod:
+    needs: dev
+    uses: amcaughan-personal/shared-workflows/.github/workflows/terragrunt-apply.yml@ca831e0767bee9dd04d13fb18444c69c689ade6f # v2.3.0
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      terragrunt_working_dir: infra/terragrunt/live/prod
+      environment: infra-production
+      aws_region: us-east-2
+      report_title: "Terragrunt apply: prod"
+    secrets:
+      aws_role_arn: ${{ secrets.APPLY_ROLE_ARN }}
