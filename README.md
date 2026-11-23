@@ -102,16 +102,32 @@ fails: stale sources, a failing test, or a model error. The Lambda's logs (dbt's
 name the failing nodes. dbt skips the models downstream of a failing test, so they keep their
 previous data until it's fixed; everything else is rebuilt as usual.
 
-**Running dbt by hand** in an environment, e.g. rebuilding every table after the raw data
-was replayed:
+**Running dbt by hand** in an environment: pass dbt arguments to the Lambda, e.g. one model and
+everything downstream of it:
 
 ```bash
 aws lambda invoke --function-name data-simulator-analytics-dev-runner \
-  --payload '{"args": ["build", "--full-refresh"]}' --cli-binary-format raw-in-base64-out \
-  --cli-read-timeout 900 /dev/stdout
+  --payload '{"args": ["build", "--select", "silver_transactions+"]}' \
+  --cli-binary-format raw-in-base64-out --cli-read-timeout 900 /dev/stdout
 ```
 
-or from your machine with `scripts/dbt.sh dev build --full-refresh`.
+or from your machine: `scripts/dbt.sh dev build --select silver_transactions+`.
+
+**Backfills.** The ELT's raw tables (`transactions`, `merchants`) reach back only 14 days, so a
+query on them lists a bounded number of S3 prefixes however old the data gets. Its
+`<table>_history` tables reach back to the first day; `--vars '{backfill: true}'` makes the
+bronze models read those instead:
+
+- **Catch up after a long gap.** If silver is older than the 14-day window, the daily build
+  fails rather than skip days, and says so. Catch up from the history tables:
+  `scripts/dbt.sh prod build --select silver_transactions+ --vars '{backfill: true}'`.
+- **Rebuild everything**, e.g. after changing how silver is computed:
+  `scripts/dbt.sh prod build --full-refresh --vars '{backfill: true}'`. Without `backfill`, a
+  full refresh would rebuild only the last 14 days.
+
+In a Lambda payload: `{"args": ["build", "--full-refresh", "--vars", "{backfill: true}"]}`.
+A backfill lists every raw prefix since the first day once per query, a few cents at most.
+If the raw files themselves are gone, the ELT re-pulls them from the API first (see its README).
 
 **Creating the runner from scratch** needs an image before the function can exist: apply
 `shared/registry`, push a first image tagged `initial`, then apply each environment's `runner`

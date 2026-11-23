@@ -7,7 +7,9 @@ sources:
     schema: data_simulator_elt_raw
     tables:
       - name: transactions
-        description: Card transactions, one file per hour, partitioned by dt and hour.
+        description: >
+          Card transactions, one file per hour, partitioned by dt and hour. The last 14 days
+          only, so queries on it list a bounded number of S3 prefixes.
         config:
           # Ingest lands each hour five minutes after it ends.
           loaded_at_field: from_iso8601_timestamp("timestamp")
@@ -15,9 +17,16 @@ sources:
             warn_after: {count: 3, period: hour}
             error_after: {count: 6, period: hour}
       - name: merchants
-        description: A full snapshot of the merchants each day, partitioned by snapshot_date.
+        description: >
+          A full snapshot of the merchants each day, partitioned by snapshot_date. The last
+          14 days only.
         config:
           loaded_at_field: cast(date(snapshot_date) as timestamp)
           freshness:
             warn_after: {count: 30, period: hour}
             error_after: {count: 54, period: hour}
+      # The same files, back to the ELT's first day. Read only with --vars '{backfill: true}'.
+      - name: transactions_history
+        description: All of the raw transactions, for backfills.
+      - name: merchants_history
+        description: All of the daily merchants snapshots, for backfills.

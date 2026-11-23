@@ -5,7 +5,8 @@
 
 Both run even if the first fails, so the models stay as fresh as the raw data allows; the
 run then fails, which is what the alarm watches. An event with `args` runs those dbt
-arguments instead, e.g. `{"args": ["build", "--full-refresh"]}` to rebuild every table.
+arguments instead, e.g. `{"args": ["build", "--full-refresh", "--vars", "{backfill: true}"]}`
+to rebuild every table from all of the raw data (see the README's "Backfills").
 
 dbt reads the environment's workgroup, bucket and schema prefix from environment variables
 (see dbt/profiles.yml) and writes its working files under /tmp (the only writable path).

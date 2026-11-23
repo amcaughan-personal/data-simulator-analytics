@@ -8,6 +8,12 @@ test-paths: ["data-tests"]
 
 clean-targets: ["target", "dbt_packages"]
 
+vars:
+  # Read the ELT's full-range history tables instead of its 14-day ones (see macros/raw_source.sql).
+  backfill: false
+  # How many days the ELT's routine raw tables reach back (its raw-zone window_days).
+  raw_window_days: 14
+
 flags:
   send_anonymous_usage_stats: false
 
