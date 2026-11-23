@@ -85,7 +85,7 @@ resource "aws_iam_role_policy" "read_gold" {
 }
 
 resource "aws_ssm_parameter" "role_arn" {
-  #checkov:skip=CKV2_AWS_34:Not a secret: a role ARN, which workflow logs show anyway
+  #checkov:skip=CKV2_AWS_34:Not a secret: a role ARN; GitHub masks it in workflow logs
   name        = "/github/${var.github_repository}/${var.github_environment}/DASHBOARD_ROLE_ARN"
   description = "GitHub environment variable DASHBOARD_ROLE_ARN for ${var.github_repository} (${var.github_environment})"
   type        = "String"
