@@ -6,4 +6,4 @@ select
     risk_tier,
     monthly_fee,
     date(snapshot_date) as snapshot_date
-from {{ source('raw', 'merchants') }}
+from {{ raw_source('merchants') }}

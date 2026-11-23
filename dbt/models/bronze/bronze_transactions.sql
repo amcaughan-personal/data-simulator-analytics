@@ -11,4 +11,4 @@ select
     anomaly,
     -- The raw file's partition (the event's UTC date), kept so filters on it prune files.
     dt
-from {{ source('raw', 'transactions') }}
+from {{ raw_source('transactions') }}

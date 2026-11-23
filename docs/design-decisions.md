@@ -45,7 +45,14 @@ partitions keeps a run's cost flat as history grows. The rest is small enough th
 is simpler and can't drift. The day of overlap makes a missed run harmless: the next one
 picks up its hours.
 
-**Trade-off:** a change to how silver is computed needs `--full-refresh` to apply to history.
+The start day is looked up before the merge and written into the query as a constant. Athena
+skips raw partitions only for constants; with the start as a subquery, every run listed every
+raw prefix since the first day, and that was most of the account's S3 bill.
+
+**Trade-off:** a change to how silver is computed needs a full rebuild to apply to history, and
+since the ELT's routine raw tables reach back only 14 days, that rebuild reads its history
+tables: `--full-refresh --vars '{backfill: true}'`. The same switch catches up after a gap
+longer than 14 days; a normal run fails rather than skip those days.
 
 ## Both environments read production's raw data
 

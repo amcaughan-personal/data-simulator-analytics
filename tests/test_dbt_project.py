@@ -8,7 +8,7 @@ from dbt.cli.main import dbtRunner
 PROJECT_DIR = Path(__file__).parent.parent / "dbt"
 
 
-def test_project_parses(monkeypatch, tmp_path):
+def parse(monkeypatch, tmp_path, *extra_args):
     for name in ("DBT_SCHEMA_PREFIX", "DBT_ATHENA_WORKGROUP", "DBT_WAREHOUSE_BUCKET"):
         monkeypatch.setenv(name, "unused")
 
@@ -23,9 +23,26 @@ def test_project_parses(monkeypatch, tmp_path):
             str(tmp_path / "target"),
             "--log-path",
             str(tmp_path / "logs"),
+            *extra_args,
         ]
     )
-
     assert result.success, result.exception
-    models = {node.name for node in result.result.nodes.values() if node.resource_type == "model"}
-    assert {"silver_transactions", "gold_card_testing"} <= models
+    return {node.name: node for node in result.result.nodes.values() if node.resource_type == "model"}
+
+
+def raw_sources(model):
+    return sorted(dep.rsplit(".", 1)[-1] for dep in model.depends_on.nodes if dep.startswith("source."))
+
+
+def test_project_parses(monkeypatch, tmp_path):
+    models = parse(monkeypatch, tmp_path)
+
+    assert {"silver_transactions", "gold_card_testing"} <= set(models)
+    assert raw_sources(models["bronze_transactions"]) == ["transactions"]
+
+
+def test_backfill_reads_the_history_tables(monkeypatch, tmp_path):
+    models = parse(monkeypatch, tmp_path, "--vars", "{backfill: true}")
+
+    assert raw_sources(models["bronze_transactions"]) == ["transactions_history"]
+    assert raw_sources(models["bronze_merchants"]) == ["merchants_history"]
