@@ -1,10 +1,15 @@
 # data-simulator-analytics
 
+> **Paused (November 2026).** The AWS resources are torn down to save cost, so the models
+> don't run and the dashboard shows its last data (24 November 2026); the code,
+> infrastructure and CI are all here. [Resuming](#resuming) brings it back.
+
 Turns the raw payments data that
 [data-simulator-elt](https://github.com/amcaughan-personal/data-simulator-elt) lands in S3 into
 tested models and a dashboard: dbt on Athena, in three layers.
 
-**Dashboard:** https://amcaughan-personal.github.io/data-simulator-analytics/ (rebuilt daily).
+**Dashboard:** https://amcaughan-personal.github.io/data-simulator-analytics/ (rebuilt daily;
+while paused, it shows the last build).
 
 ```
 EventBridge Scheduler (daily) ─► dbt runner (container Lambda) ─► Athena
@@ -147,6 +152,19 @@ scripts/build-image.sh "$repo:initial"
 aws ecr get-login-password | docker login --username AWS --password-stdin "${repo%%/*}"
 docker push "$repo:initial"
 ```
+
+## Resuming
+
+Resume data-simulator-elt first, so there's raw data to read. Then:
+
+1. Revert the pause PR, which turns the automatic triggers back on (deploy, apply, drift,
+   dashboard).
+2. Apply `shared/registry` (by hand, or [terragrunt-apply](.github/workflows/terragrunt-apply.yml)
+   started by hand, which also creates the warehouses), push a first image and create each
+   environment's `runner` by hand, as in *Creating the runner from scratch* above.
+3. Rebuild every table from all of the raw data, not just the last 14 days:
+   `scripts/dbt.sh prod build --full-refresh --vars '{backfill: true}'` (and the same for
+   `dev`). Then run the [dashboard workflow](.github/workflows/dashboard.yml) by hand.
 
 ## Development environment
 
