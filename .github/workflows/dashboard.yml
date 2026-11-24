@@ -5,14 +5,8 @@ name: dashboard
 # `dashboard` environment, the only one whose AWS role can query the gold tables.
 
 on:
-  schedule:
-    - cron: "0 8 * * *"
-  push:
-    branches: [main]
-    paths:
-      - "dashboard/**"
-      - "scripts/export-gold.sh"
-      - ".github/workflows/dashboard.yml"
+  # Paused while this project's AWS resources are torn down (see the README): runs only when
+  # started by hand. Reverting the pause PR restores the automatic triggers.
   workflow_dispatch:
 
 permissions:
